@@ -1,0 +1,7 @@
+main: "jp.jyn.autopermission.AutoPermission"
+name: "AutoPermission"
+version: "${project.version}"
+website: "${project.url}"
+author: "HimaJyun( https://jyn.jp/ )"
+description: "Automatic permission control with total time played."
+api-version: "1.14"
