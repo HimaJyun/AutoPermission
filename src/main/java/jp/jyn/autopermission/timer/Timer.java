@@ -9,14 +9,12 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class Timer implements Runnable, Listener {
-    private final Map<Player, Long> timer = new ConcurrentHashMap<>();
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Map<Player, Long> timer = new HashMap<>();
+    private final Map<Player, Float> afk = new HashMap<>();
 
     private final TimeRepository repository;
 
@@ -26,35 +24,51 @@ public class Timer implements Runnable, Listener {
 
     @EventHandler
     public void join(PlayerJoinEvent e) {
-        timer.put(e.getPlayer(), System.currentTimeMillis());
-        executor.submit(() -> repository.setLastLogin(
+        Player player = e.getPlayer();
+        timer.put(player, System.currentTimeMillis());
+        afk.put(player, player.getLocation().getYaw());
+
+        repository.setLastLogin(
             e.getPlayer().getUniqueId(),
             Instant.ofEpochMilli(System.currentTimeMillis())
-        ));
+        );
     }
 
     @EventHandler
     public void quit(PlayerQuitEvent e) {
         Long old = timer.remove(e.getPlayer());
-        if (old == null) {
+        Float yaw = afk.remove(e.getPlayer());
+        if (old == null || yaw == null) {
             return;
         }
 
         long time = System.currentTimeMillis() - old;
-        repository.addPlayedTime(e.getPlayer().getUniqueId(), time);
+
+        if (yaw == e.getPlayer().getLocation().getYaw()) {
+            repository.addAfkTime(e.getPlayer().getUniqueId(), time);
+        } else {
+            repository.addPlayedTime(e.getPlayer().getUniqueId(), time);
+        }
     }
 
     @Override
     public void run() {
         for (Player player : Bukkit.getOnlinePlayers().toArray(new Player[0])) {
             long unix = System.currentTimeMillis();
+            float yaw = player.getLocation().getYaw();
+
             Long old = timer.put(player, unix);
-            if (old == null) {
+            Float oldYaw = afk.put(player, yaw);
+            if (old == null || oldYaw == null) {
                 continue;
             }
 
             long time = unix - old;
-            repository.addPlayedTime(player.getUniqueId(), time);
+            if (yaw == oldYaw) {
+                repository.addAfkTime(player.getUniqueId(), time);
+            } else {
+                repository.addPlayedTime(player.getUniqueId(), time);
+            }
         }
     }
 }
