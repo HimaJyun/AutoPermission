@@ -16,25 +16,33 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class Timer implements Runnable, Listener {
+    private final Logger logger;
+
+    private final static TimeUnit UNIT = TimeUnit.MILLISECONDS;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Map<Player, Long> timer = new HashMap<>();
     private final Map<Player, Float> afk = new HashMap<>();
 
-    private final NavigableMap<Long, String> groups;
-    private final Map<String, LinkedItem<String>> priority;
     private final TimeRepository repository;
     private final Permission permission;
+    private final NavigableMap<Long, String> groups;
+    private final Map<String, LinkedItem<String>> priority;
 
     @PackagePrivate
     Timer(MainConfig config, TimeRepository repository) {
-        this.groups = config.permission;
-        this.repository = repository;
+        this.logger = AutoPermission.getInstance().getLogger();
 
-        priority = MapBuilder.initUnmodifiableMap(new HashMap<>(), m -> {
+        this.repository = repository;
+        this.groups = config.permission;
+
+        this.priority = MapBuilder.initUnmodifiableMap(new HashMap<>(), m -> {
             LinkedItem<String> prev = null;
             for (String s : config.priority) {
                 prev = new LinkedItem<>(s, prev);
@@ -42,105 +50,114 @@ public class Timer implements Runnable, Listener {
             }
         });
 
-        RegisteredServiceProvider<Permission> rsp = Bukkit.getServer().getServicesManager().getRegistration(Permission.class);
-        permission = Objects.requireNonNull(rsp).getProvider();
+        this.permission = Optional.ofNullable(Bukkit.getServer().getServicesManager().getRegistration(Permission.class))
+            .map(RegisteredServiceProvider::getProvider)
+            .orElseThrow(() -> new RuntimeException("Failed to get Permission service provider."));
+
+        executor.submit(() -> Thread.currentThread().setName("autopermission-timer"));
+    }
+
+    private long time() {
+        return System.currentTimeMillis();
+    }
+
+    private float yaw(Player player) {
+        return player.getLocation().getYaw();
     }
 
     @EventHandler
     public void join(PlayerJoinEvent e) {
         Player player = e.getPlayer();
-        timer.put(player, System.currentTimeMillis());
-        afk.put(player, player.getLocation().getYaw());
+        timer.put(player, time());
+        afk.put(player, yaw(player));
 
-        repository.setLastLogin(
-            e.getPlayer().getUniqueId(),
-            Instant.ofEpochMilli(System.currentTimeMillis())
-        );
-
-        checkPermission(player);
+        executor.submit(() -> {
+            repository.setLastLogin(player, Instant.now());
+            checkPermission(player);
+        });
     }
 
     @EventHandler
     public void quit(PlayerQuitEvent e) {
-        Long old = timer.remove(e.getPlayer());
-        Float yaw = afk.remove(e.getPlayer());
+        Player player = e.getPlayer();
+        Long old = timer.remove(player);
+        Float yaw = afk.remove(player);
         if (old == null || yaw == null) {
             return;
         }
 
-        long time = System.currentTimeMillis() - old;
-
-        if (yaw == e.getPlayer().getLocation().getYaw()) {
-            repository.addAfkTime(e.getPlayer(), time, TimeUnit.MILLISECONDS);
-        } else {
-            repository.addPlayedTime(e.getPlayer(), time, TimeUnit.MILLISECONDS);
-        }
+        long time = time() - old;
+        executor.submit(yaw == yaw(player) ?
+            () -> repository.addAfkTime(player, time, UNIT) :
+            () -> repository.addPlayedTime(player, time, UNIT)
+        );
     }
 
     @Override
     public void run() {
-        for (Player player : Bukkit.getOnlinePlayers().toArray(new Player[0])) {
-            long unix = System.currentTimeMillis();
-            float yaw = player.getLocation().getYaw();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            long unix = time();
+            float yaw = yaw(player);
 
-            Long old = timer.put(player, unix);
+            Long oldTime = timer.put(player, unix);
             Float oldYaw = afk.put(player, yaw);
-            if (old == null || oldYaw == null) {
+            if (oldTime == null || oldYaw == null) {
                 continue;
             }
 
-            long time = unix - old;
-            if (yaw == oldYaw) {
-                repository.addAfkTime(player, time, TimeUnit.MILLISECONDS);
-            } else {
-                repository.addPlayedTime(player, time, TimeUnit.MILLISECONDS);
-            }
-            checkPermission(player);
+            long time = unix - oldTime;
+            executor.submit(yaw == oldYaw ?
+                () -> repository.addAfkTime(player, time, UNIT) :
+                () -> {
+                    repository.addPlayedTime(player, time, UNIT);
+                    checkPermission(player);
+                }
+            );
         }
     }
 
     private void checkPermission(Player player) {
-        long played = repository.getPlayedTime(player, TimeUnit.MILLISECONDS);
-        Map.Entry<Long, String> passed = groups.floorEntry(played);
-        if (passed == null) {
-            return;
-        }
+        long played = repository.getPlayedTime(player, UNIT);
 
-        // 既に加入していたら何もしない
-        if (permission.playerInGroup(null, player, passed.getValue())) {
-            return;
-        }
-
-        // ランクが定義されてなければエラー、ちゃんと設定してね！
-        Logger logger = AutoPermission.getInstance().getLogger();
-        LinkedItem<String> item = priority.get(passed.getValue());
-        if (item == null) {
-            logger.severe(passed.getValue() + " is not set to the priority of the group. (config.yml)");
-            return;
-        }
-
-        String[] group = permission.getPlayerGroups(null, player);
-        // 到達済みグループより高位のグループがあれば何もしない
-        for (String s : group) {
-            LinkedItem<String> g = priority.get(s);
-            // 判定不能
-            if (g == null) {
-                logger.severe(s + " is not set to the priority of the group. (config.yml)");
-                continue;
-            }
-
-            if (item.link < g.link) {
+        Bukkit.getScheduler().runTask(AutoPermission.getInstance(), () -> {
+            Map.Entry<Long, String> passed = groups.floorEntry(played);
+            if (passed == null) {
                 return;
             }
-        }
 
-        // 新しいランクに加入して古いランクをすべて離脱
-        permission.playerAddGroup(null, player, item.value);
-        LinkedItem<String> prev = item.prev;
-        while (prev != null) {
-            permission.playerRemoveGroup(null, player, prev.value);
-            prev = prev.prev;
-        }
+            // 既に加入していたら何もしない
+            if (permission.playerInGroup(null, player, passed.getValue())) {
+                return;
+            }
+
+            // ランクが定義されてなければエラー、ちゃんと設定してね！
+            LinkedItem<String> item = priority.get(passed.getValue());
+            if (item == null) {
+                logger.severe(passed.getValue() + " is not set to the priority of the group. (config.yml)");
+                return;
+            }
+
+            String[] group = permission.getPlayerGroups(null, player);
+            // 到達済みグループより高位のグループがあれば何もしない
+            for (String s : group) {
+                LinkedItem<String> g = priority.get(s);
+                // 設定されてないグループは無視する
+                if (g == null) {
+                    continue;
+                }
+                if (item.link < g.link) {
+                    return;
+                }
+            }
+
+            // 新しいランクに加入して古いランクをすべて離脱
+            permission.playerAddGroup(null, player, item.value);
+            LinkedItem<String> prev = item.prev;
+            while (prev != null) {
+                permission.playerRemoveGroup(null, player, prev.value);
+                prev = prev.prev;
+            }
+        });
     }
 
     // 連結数カウント付き片方向連結リスト

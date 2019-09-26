@@ -46,8 +46,12 @@ public class TimeRepository {
         return this.getLastLogin(player.getUniqueId());
     }
 
-    public void setLastLogin(UUID uuid, Instant unixtime) {
-        database.updateLogin(getId(uuid), unixtime.toEpochMilli());
+    public void setLastLogin(UUID uuid, Instant time) {
+        database.updateLogin(getId(uuid), time.toEpochMilli());
+    }
+
+    public void setLastLogin(OfflinePlayer player, Instant time) {
+        this.setLastLogin(player.getUniqueId(), time);
     }
 
     public long getTotalTime(UUID uuid, TimeUnit unit) {
