@@ -3,6 +3,7 @@ package jp.jyn.autopermission;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import jp.jyn.autopermission.config.MainConfig;
+import jp.jyn.jbukkitlib.util.PackagePrivate;
 import jp.jyn.jbukkitlib.uuid.UUIDBytes;
 
 import java.sql.Connection;
@@ -16,7 +17,8 @@ import java.util.logging.Logger;
 public class Database {
     private final HikariDataSource hikari;
 
-    public Database(MainConfig.DatabaseConfig config) {
+    @PackagePrivate
+    Database(MainConfig.DatabaseConfig config) {
         HikariConfig hc = new HikariConfig();
 
         hc.setJdbcUrl(config.url);
@@ -61,7 +63,8 @@ public class Database {
         }
     }
 
-    public void close() {
+    @PackagePrivate
+    void close() {
         if (hikari != null) {
             hikari.close();
         }
@@ -225,6 +228,10 @@ public class Database {
     // ------------------ time -----------------
     // | id (int) | played (long) | afk (long) |
     // -----------------------------------------
+    public long getTotalTime(int id) {
+        return selectLongWhereId("SELECT `played`+`afk` FROM `time` WHERE `id`=?", id);
+    }
+
     public long getPlayedTime(int id) {
         return selectLongWhereId("SELECT `played` FROM `time` WHERE `id`=?", id);
     }

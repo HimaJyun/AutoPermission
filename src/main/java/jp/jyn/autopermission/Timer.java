@@ -1,9 +1,8 @@
-package jp.jyn.autopermission.timer;
+package jp.jyn.autopermission;
 
-import jp.jyn.autopermission.AutoPermission;
-import jp.jyn.autopermission.TimeRepository;
 import jp.jyn.autopermission.config.MainConfig;
 import jp.jyn.jbukkitlib.util.MapBuilder;
+import jp.jyn.jbukkitlib.util.PackagePrivate;
 import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -18,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class Timer implements Runnable, Listener {
@@ -29,7 +29,8 @@ public class Timer implements Runnable, Listener {
     private final TimeRepository repository;
     private final Permission permission;
 
-    public Timer(MainConfig config, TimeRepository repository) {
+    @PackagePrivate
+    Timer(MainConfig config, TimeRepository repository) {
         this.groups = config.permission;
         this.repository = repository;
 
@@ -70,9 +71,9 @@ public class Timer implements Runnable, Listener {
         long time = System.currentTimeMillis() - old;
 
         if (yaw == e.getPlayer().getLocation().getYaw()) {
-            repository.addAfkTime(e.getPlayer().getUniqueId(), time);
+            repository.addAfkTime(e.getPlayer(), time, TimeUnit.MILLISECONDS);
         } else {
-            repository.addPlayedTime(e.getPlayer().getUniqueId(), time);
+            repository.addPlayedTime(e.getPlayer(), time, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -90,16 +91,16 @@ public class Timer implements Runnable, Listener {
 
             long time = unix - old;
             if (yaw == oldYaw) {
-                repository.addAfkTime(player.getUniqueId(), time);
+                repository.addAfkTime(player, time, TimeUnit.MILLISECONDS);
             } else {
-                repository.addPlayedTime(player.getUniqueId(), time);
+                repository.addPlayedTime(player, time, TimeUnit.MILLISECONDS);
             }
             checkPermission(player);
         }
     }
 
     private void checkPermission(Player player) {
-        long played = repository.getPlayedTime(player.getUniqueId());
+        long played = repository.getPlayedTime(player, TimeUnit.MILLISECONDS);
         Map.Entry<Long, String> passed = groups.floorEntry(played);
         if (passed == null) {
             return;

@@ -2,7 +2,6 @@ package jp.jyn.autopermission;
 
 import jp.jyn.autopermission.config.ConfigLoader;
 import jp.jyn.autopermission.config.MainConfig;
-import jp.jyn.autopermission.timer.Timer;
 import org.bukkit.Bukkit;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
