@@ -1,6 +1,26 @@
 # Check new version.
 checkVersion: true
 
+# Set the time until promotion to a new group.
+# syntax: <number><unit>: <group>
+# unit = [d]ay/[h]our/[m]inute
+permission:
+  30m: "beginner"
+  1d12h: "resident"
+  10d: "super"
+
+# Specify group priority.
+# Prevent users from being added to the wrong group when they belong to a higher group.
+priority:
+  # Lower
+  - "default"
+  - "beginner"
+  - "resident"
+  - "super"
+  - "moderator"
+  - "administrator"
+  # Higher
+
 database:
   # Database type. (sqlite/mysql)
   type: sqlite
@@ -13,11 +33,9 @@ database:
     password: "your_mysql_password"
     properties:
       "useSSL": "false"
-      # encoding
       #"useUnicode": "true"
       #"characterEncoding": "UTF-8"
       #"characterSetResults": "UTF-8"
-      # performance
       "maintainTimeStats": "false"
       "elideSetAutoCommits": "true"
       "useLocalSessionState": "true"

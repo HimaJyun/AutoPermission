@@ -33,12 +33,11 @@ public class AutoPermission extends JavaPlugin {
 
         repository = new TimeRepository(database);
 
-        Timer timer = new Timer(repository);
+        Timer timer = new Timer(mainConfig, repository);
         Bukkit.getPluginManager().registerEvents(timer, this);
         destructor.addFirst(() -> HandlerList.unregisterAll(this));
         BukkitTask task = Bukkit.getScheduler().runTaskTimer(this, timer, 0, mainConfig.checkInterval * 20);
         destructor.addFirst(task::cancel);
-
     }
 
     @Override
