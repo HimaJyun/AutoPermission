@@ -114,11 +114,13 @@ public class TimeRepository {
 
     public String format(long time, TimeUnit unit, TemplateVariable variable) {
         StringBuilder builder = new StringBuilder();
-        long tmp = unit.toMinutes(time);
+        long m = unit.toMinutes(time);
+        long d = m / (24 * 60); // 87917 / (24 * 60) = 61
+        m -= d * (24 * 60); // 87917 - (61*24*60) = 77
+        long h = m / 60; // 77 / 60 = 1
+        m -= h * 60; // 77 - (1*60) = 17
+        // 61 day 1 hour 17 minute
 
-        long d = tmp / (24 * 60);
-        long h = tmp / ((24 * 60) + 60);
-        long m = tmp % 60;
         if (d != 0) {
             builder.append(message.formatDay.toString(variable.put("value", d)));
         }
