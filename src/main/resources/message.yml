@@ -1,0 +1,14 @@
+format:
+  separator: " "
+  day: "{value} day"
+  hour: "{value} hour"
+  minute: "{value} minute"
+
+join:
+  broadcast: "{player} played with the Foo server for {time}!"
+  new: "{player} is a new user!"
+
+promote: "{player} was promoted to {group} because he played with Foo server for {time}!"
+
+# Don't touch!
+version: 1
