@@ -2,10 +2,8 @@ package jp.jyn.autopermission;
 
 import jp.jyn.autopermission.config.ConfigLoader;
 import jp.jyn.autopermission.config.MainConfig;
-import org.bukkit.Bukkit;
-import org.bukkit.event.HandlerList;
+import jp.jyn.autopermission.config.MessageConfig;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -25,18 +23,16 @@ public class AutoPermission extends JavaPlugin {
         ConfigLoader config = new ConfigLoader();
         config.reloadConfig();
         MainConfig mainConfig = config.getMainConfig();
+        MessageConfig messageConfig = config.getMessageConfig();
 
         // Database
         Database database = new Database(mainConfig.database);
         destructor.addFirst(database::close);
 
-        repository = new TimeRepository(database);
+        repository = new TimeRepository(messageConfig, database);
 
-        Timer timer = new Timer(mainConfig, repository);
-        Bukkit.getPluginManager().registerEvents(timer, this);
-        destructor.addFirst(() -> HandlerList.unregisterAll(this));
-        BukkitTask task = Bukkit.getScheduler().runTaskTimer(this, timer, 0, mainConfig.checkInterval * 20);
-        destructor.addFirst(task::cancel);
+        Timer timer = new Timer(mainConfig, messageConfig, repository);
+        destructor.addFirst(timer::stop);
     }
 
     @Override

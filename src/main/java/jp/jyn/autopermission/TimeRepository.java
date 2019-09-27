@@ -1,5 +1,8 @@
 package jp.jyn.autopermission;
 
+import jp.jyn.autopermission.config.MessageConfig;
+import jp.jyn.jbukkitlib.config.parser.template.variable.StringVariable;
+import jp.jyn.jbukkitlib.config.parser.template.variable.TemplateVariable;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
@@ -11,10 +14,12 @@ import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("WeakerAccess")
 public class TimeRepository {
+    private final MessageConfig message;
     private final Database database;
     private final Map<UUID, Integer> id = new ConcurrentHashMap<>();
 
-    public TimeRepository(Database database) {
+    public TimeRepository(MessageConfig message, Database database) {
+        this.message = message;
         this.database = database;
     }
 
@@ -101,5 +106,32 @@ public class TimeRepository {
 
     public void addPlayedTime(OfflinePlayer player, long time, TimeUnit unit) {
         this.addPlayedTime(player.getUniqueId(), time, unit);
+    }
+
+    public String format(long time, TimeUnit unit) {
+        return this.format(time, unit, StringVariable.init());
+    }
+
+    public String format(long time, TimeUnit unit, TemplateVariable variable) {
+        StringBuilder builder = new StringBuilder();
+        long tmp = unit.toMinutes(time);
+
+        long d = tmp / (24 * 60);
+        long h = tmp / ((24 * 60) + 60);
+        long m = tmp % 60;
+        if (d != 0) {
+            builder.append(message.formatDay.toString(variable.put("value", d)));
+        }
+        if (h != 0) {
+            if (builder.length() != 0) {
+                builder.append(message.formatSeparator);
+            }
+            builder.append(message.formatHour.toString(variable.put("value", h)));
+        }
+        if (builder.length() != 0) {
+            builder.append(message.formatSeparator);
+        }
+        builder.append(message.formatMinute.toString(variable.put("value", m)));
+        return builder.toString();
     }
 }
